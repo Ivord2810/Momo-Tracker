@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Money Payment Tracker</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase CDN for database interactions and authentication -->
+    <script src="https://unpkg.com/@supabase/supabase-js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-4">
+    <div class="flex flex-col items-center min-h-screen">
+        <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+
+        <!-- Authentication UI: Hidden by default -->
+        <div id="auth-container" class="w-full max-w-md my-auto p-8 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
+            <h1 class="text-3xl font-bold text-center mb-6">Welcome</h1>
+            <div class="flex justify-center mb-6">
+                <button id="show-login-btn" class="px-4 py-2 text-sm font-semibold rounded-l-md border border-r-0 focus:outline-none transition-colors duration-200">Login</button>
+                <button id="show-signup-btn" class="px-4 py-2 text-sm font-semibold rounded-r-md border border-l-0 focus:outline-none transition-colors duration-200">Signup</button>
+            </div>
+            
+            <!-- Login Form -->
+            <form id="login-form" class="space-y-4 hidden">
+                <div>
+                    <label for="login-email" class="block text-sm font-medium mb-1">Email</label>
+                    <input id="login-email" type="email" required class="w-full p-2 border rounded-md focus:ring-2 focus:ring-cyan-500 dark:bg-slate-700 dark:border-slate-600">
+                </div>
+                <div>
+                    <label for="login-password" class="block text-sm font-medium mb-1">Password</label>
+                    <input id="login-password" type="password" required class="w-full p-2 border rounded-md focus:ring-2 focus:ring-cyan-500 dark:bg-slate-700 dark:border-slate-600">
+                </div>
+                <button type="submit" class="w-full px-4 py-2 rounded-md font-semibold text-white bg-cyan-600 hover:bg-cyan-700 transition-colors">Log In</button>
+            </form>
+
+            <!-- Signup Form -->
+            <form id="signup-form" class="space-y-4 hidden">
+                <div>
+                    <label for="signup-email" class="block text-sm font-medium mb-1">Email</label>
+                    <input id="signup-email" type="email" required class="w-full p-2 border rounded-md focus:ring-2 focus:ring-cyan-500 dark:bg-slate-700 dark:border-slate-600">
+                </div>
+                <div>
+                    <label for="signup-password" class="block text-sm font-medium mb-1">Password</label>
+                    <input id="signup-password" type="password" required class="w-full p-2 border rounded-md focus:ring-2 focus:ring-cyan-500 dark:bg-slate-700 dark:border-slate-600">
+                </div>
+                <div>
+                    <label for="confirm-password" class="block text-sm font-medium mb-1">Confirm Password</label>
+                    <input id="confirm-password" type="password" required class="w-full p-2 border rounded-md focus:ring-2 focus:ring-cyan-500 dark:bg-slate-700 dark:border-slate-600">
+                </div>
+                <button type="submit" class="w-full px-4 py-2 rounded-md font-semibold text-white bg-cyan-600 hover:bg-cyan-700 transition-colors">Sign Up</button>
+            </form>
+        </div>
+
+        <!-- Main App UI: Hidden by default -->
+        <div id="main-app-container" class="hidden w-full max-w-6xl mx-auto p-4 md:p-6 lg:p-8">
+            <div class="flex flex-col md:flex-row md:justify-between md:items-center w-full mb-6 space-y-4 md:space-y-0">
+                <h1 class="text-4xl font-extrabold tracking-tight">
+                    Payment Tracker
+                </h1>
+                <div class="flex flex-wrap gap-2 justify-end">
+                    <button id="insights-btn" class="px-4 py-2 rounded-md font-semibold text-white bg-indigo-500 hover:bg-indigo-600 transition-colors shadow-md">
+                        ✨ Generate Spending Insights
+                    </button>
+                    <button id="export-btn" class="px-4 py-2 rounded-md font-semibold text-white bg-emerald-500 hover:bg-emerald-600 transition-colors shadow-md">
+                        Export to CSV
+                    </button>
+                    <button id="logout-btn" class="px-4 py-2 rounded-md font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors shadow-md">
+                        Logout
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-6 w-full">
+                <div class="p-6 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
+                    <div class="mb-4">
+                        <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100">Add New Transaction</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                            Fill out the form below to record a new expense.
+                        </p>
+                    </div>
+                    <!-- Updated form for multiple line items -->
+                    <form id="transaction-form" class="space-y-4">
+                        <div>
+                            <label for="date_of_transaction" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date of Transaction</label>
+                            <input id="date_of_transaction" name="date_of_transaction" type="date" required class="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 dark:bg-slate-700 dark:border-slate-600">
+                        </div>
+                        <div>
+                            <label for="issued_by" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Issued By</label>
+                            <input id="issued_by" name="issued_by" type="text" required class="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 dark:bg-slate-700 dark:border-slate-600">
+                        </div>
+                        <div>
+                            <label for="received_by" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Received By</label>
+                            <input id="received_by" name="received_by" type="text" required class="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 dark:bg-slate-700 dark:border-slate-600">
+                        </div>
+                        
+                        <!-- Expense Line Items Container -->
+                        <div id="expense-items-container" class="space-y-2">
+                            <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mt-4 mb-2">Expenses</h3>
+                            <!-- Template for a single expense line item -->
+                            <div class="expense-item flex flex-col md:flex-row md:space-x-2 space-y-2 md:space-y-0">
+                                <input type="text" placeholder="Description of expense" required class="expense-description w-full md:w-2/3 p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 dark:bg-slate-700 dark:border-slate-600">
+                                <input type="number" step="0.01" placeholder="Amount paid" required class="expense-amount w-full md:w-1/3 p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 dark:bg-slate-700 dark:border-slate-600">
+                            </div>
+                        </div>
+
+                        <button type="button" id="add-expense-btn" class="w-full px-4 py-2 rounded-md font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 transition-colors border border-slate-300 dark:border-slate-600">
+                            + Add Another Expense
+                        </button>
+
+                        <div class="flex items-center space-x-2 mt-4">
+                            <label for="receipt_or_not" class="text-sm font-medium text-slate-700 dark:text-slate-300">Receipt?</label>
+                            <input id="receipt_or_not" name="receipt_or_not" type="checkbox" class="h-4 w-4 text-cyan-600 border-slate-300 rounded focus:ring-cyan-500">
+                        </div>
+                        <button type="submit" class="w-full px-4 py-2 rounded-md font-semibold text-white bg-cyan-600 hover:bg-cyan-700 transition-colors">
+                            Add Transaction
+                        </button>
+                    </form>
+                </div>
+                
+                <div class="p-6 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
+                    <div class="mb-4">
+                        <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100">Previous Transactions</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                            A history of all your recorded mobile money payments.
+                        </p>
+                    </div>
+                    <div id="transactions-list" class="overflow-x-auto rounded-md shadow-lg">
+                        <p id="loading-message" class="text-center py-10 text-slate-500 dark:text-slate-400">Loading transactions...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Insights Modal (Hidden by default) -->
+        <div id="insights-modal" class="fixed inset-0 bg-slate-900 bg-opacity-75 z-50 hidden flex items-center justify-center p-4">
+            <div class="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
+                <h2 class="text-2xl font-bold mb-4">Spending Insights Report</h2>
+                <button id="close-modal-btn" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+                <div id="insights-content" class="prose dark:prose-invert max-w-none text-slate-700 dark:text-slate-300">
+                    <p class="text-center text-slate-500 dark:text-slate-400" id="insights-loading-message">
+                        Generating your personalized spending report...
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Supabase client initialization
+            const supabaseUrl = 'https://apbjwqaejhrekfgorcxe.supabase.co';
+            const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFwYmp3cWFlamhyZWtmZ29yY3hlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwMzU5MTQsImV4cCI6MjA2OTYxMTkxNH0.eE1sfGkA8_MKJFJ9PApVnooQNVXoK6l5g7_F4upXpZk';
+            const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+            // UI elements
+            const authContainer = document.getElementById('auth-container');
+            const mainAppContainer = document.getElementById('main-app-container');
+            const showLoginBtn = document.getElementById('show-login-btn');
+            const showSignupBtn = document.getElementById('show-signup-btn');
+            const loginForm = document.getElementById('login-form');
+            const signupForm = document.getElementById('signup-form');
+            const logoutBtn = document.getElementById('logout-btn');
+            const transactionForm = document.getElementById('transaction-form');
+            const transactionsListDiv = document.getElementById('transactions-list');
+            const loadingMessage = document.getElementById('loading-message');
+            const exportButton = document.getElementById('export-btn');
+            const insightsButton = document.getElementById('insights-btn');
+            const insightsModal = document.getElementById('insights-modal');
+            const closeModalBtn = document.getElementById('close-modal-btn');
+            const insightsContent = document.getElementById('insights-content');
+            const insightsLoadingMessage = document.getElementById('insights-loading-message');
+            const toastContainer = document.getElementById('toast-container');
+            
+            // New UI elements for multi-line expenses
+            const expenseItemsContainer = document.getElementById('expense-items-container');
+            const addExpenseBtn = document.getElementById('add-expense-btn');
+
+            // Simple toast notification function
+            const showToast = (message, type = 'success') => {
+                const toast = document.createElement('div');
+                toast.className = `p-4 rounded-lg shadow-lg text-white font-bold transition-transform transform duration-300 ease-in-out ${type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`;
+                toast.innerHTML = `<span>${message}</span>`;
+                toastContainer.appendChild(toast);
+                setTimeout(() => {
+                    toast.remove();
+                }, 3000);
+            };
+
+            // Switch between login and signup forms
+            showLoginBtn.addEventListener('click', () => {
+                loginForm.classList.remove('hidden');
+                signupForm.classList.add('hidden');
+                showLoginBtn.classList.add('bg-slate-200', 'dark:bg-slate-700');
+                showSignupBtn.classList.remove('bg-slate-200', 'dark:bg-slate-700');
+            });
+
+            showSignupBtn.addEventListener('click', () => {
+                signupForm.classList.remove('hidden');
+                loginForm.classList.add('hidden');
+                showSignupBtn.classList.add('bg-slate-200', 'dark:bg-slate-700');
+                showLoginBtn.classList.remove('bg-slate-200', 'dark:bg-slate-700');
+            });
+
+            // Initial state for auth forms
+            showLoginBtn.click();
+            
+            // Password validation function
+            const validatePassword = (password) => {
+                const hasUppercase = /[A-Z]/.test(password);
+                const hasNumber = /[0-9]/.test(password);
+                const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+                const isLongEnough = password.length >= 8;
+
+                if (!isLongEnough) {
+                    return "Password must be at least 8 characters long.";
+                }
+                if (!hasUppercase) {
+                    return "Password must contain at least one uppercase letter.";
+                }
+                if (!hasNumber) {
+                    return "Password must contain at least one number.";
+                }
+                if (!hasSymbol) {
+                    return "Password must contain at least one symbol (!@#$%^&...).";
+                }
+                return null; // Password is valid
+            };
+
+            // Handle user signup
+            signupForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('signup-email').value;
+                const password = document.getElementById('signup-password').value;
+                const confirmPassword = document.getElementById('confirm-password').value;
+                
+                if (password !== confirmPassword) {
+                    showToast('Passwords do not match.', 'error');
+                    return;
+                }
+
+                const validationError = validatePassword(password);
+                if (validationError) {
+                    showToast(validationError, 'error');
+                    return;
+                }
+
+                try {
+                    const { error } = await supabase.auth.signUp({ email, password });
+                    if (error) throw error;
+                    showToast('Signup successful! Please check your email to confirm your account.', 'success');
+                    signupForm.reset();
+                } catch (error) {
+                    console.error('Signup error:', error.message);
+                    showToast(`Signup failed: ${error.message}`, 'error');
+                }
+            });
+
+            // Handle user login
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('login-email').value;
+                const password = document.getElementById('login-password').value;
+                
+                try {
+                    const { error } = await supabase.auth.signInWithPassword({ email, password });
+                    if (error) throw error;
+                    showToast('Login successful!', 'success');
+                } catch (error) {
+                    console.error('Login error:', error.message);
+                    showToast(`Login failed: ${error.message}`, 'error');
+                }
+            });
+
+            // Handle user logout
+            logoutBtn.addEventListener('click', async () => {
+                try {
+                    const { error } = await supabase.auth.signOut();
+                    if (error) throw error;
+                    showToast('Logged out successfully.', 'success');
+                } catch (error) {
+                    console.error('Logout error:', error.message);
+                    showToast(`Logout failed: ${error.message}`, 'error');
+                }
+            });
+
+            // Listen for auth state changes
+            supabase.auth.onAuthStateChange((event, session) => {
+                if (session) {
+                    // User is logged in
+                    authContainer.classList.add('hidden');
+                    mainAppContainer.classList.remove('hidden');
+                    fetchTransactions(session.user.id);
+                } else {
+                    // User is logged out
+                    authContainer.classList.remove('hidden');
+                    mainAppContainer.classList.add('hidden');
+                    document.getElementById('transactions-list').innerHTML = `<p id="loading-message" class="text-center py-10 text-slate-500 dark:text-slate-400">Please login to view your transactions.</p>`;
+                }
+            });
+
+            // Fetch transactions for the authenticated user
+            const fetchTransactions = async (userId) => {
+                loadingMessage.style.display = 'block';
+                transactionsListDiv.querySelector('table')?.remove();
+
+                try {
+                    const { data, error } = await supabase
+                        .from('transactions')
+                        .select('*')
+                        .eq('user_id', userId)
+                        .order('date_of_transaction', { ascending: false });
+
+                    if (error) throw error;
+                    renderTransactions(data || []);
+                } catch (error) {
+                    console.error('Error fetching transactions:', error.message);
+                    showToast(`Failed to fetch transactions: ${error.message}`, 'error');
+                } finally {
+                    loadingMessage.style.display = 'none';
+                }
+            };
+
+            // Render transactions to the table
+            const renderTransactions = (transactions) => {
+                if (transactions.length === 0) {
+                    transactionsListDiv.innerHTML = '<p class="text-center py-10 text-slate-500 dark:text-slate-400">No transactions found. Add a new one to get started!</p>';
+                    return;
+                }
+
+                let tableHtml = `
+                    <table class="w-full text-sm text-left text-slate-500 dark:text-slate-400">
+                        <thead class="text-xs text-slate-700 uppercase bg-slate-200 dark:bg-slate-700 dark:text-slate-400">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 rounded-tl-md">Date</th>
+                                <th scope="col" class="px-6 py-3">Issued By</th>
+                                <th scope="col" class="px-6 py-3">Received By</th>
+                                <th scope="col" class="px-6 py-3">Description</th>
+                                <th scope="col" class="px-6 py-3">Amount</th>
+                                <th scope="col" class="px-6 py-3 rounded-tr-md">Receipt</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
+                `;
+                transactions.forEach(t => {
+                    tableHtml += `
+                        <tr class="hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900 dark:text-slate-100">${t.date_of_transaction}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">${t.issued_by}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">${t.received_by}</td>
+                            <td class="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">${t.description_of_expense}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">${t.amount_paid}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
+                                ${t.receipt_or_not ? '<span class="text-emerald-500">&#10003;</span>' : '<span class="text-red-500">&#10007;</span>'}
+                            </td>
+                        </tr>
+                    `;
+                });
+                tableHtml += `</tbody></table>`;
+                transactionsListDiv.innerHTML = tableHtml;
+            };
+
+            // Event listener for adding new expense line items
+            addExpenseBtn.addEventListener('click', () => {
+                const newExpenseItem = document.createElement('div');
+                newExpenseItem.className = 'expense-item flex flex-col md:flex-row md:space-x-2 space-y-2 md:space-y-0';
+                newExpenseItem.innerHTML = `
+                    <input type="text" placeholder="Description of expense" required class="expense-description w-full md:w-2/3 p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 dark:bg-slate-700 dark:border-slate-600">
+                    <input type="number" step="0.01" placeholder="Amount paid" required class="expense-amount w-full md:w-1/3 p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 dark:bg-slate-700 dark:border-slate-600">
+                    <button type="button" class="remove-expense-btn px-2 py-1 rounded-md text-red-500 hover:text-red-700 transition-colors self-start md:self-auto">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                `;
+                expenseItemsContainer.appendChild(newExpenseItem);
+                
+                // Add event listener for the new remove button
+                newExpenseItem.querySelector('.remove-expense-btn').addEventListener('click', (e) => {
+                    e.currentTarget.parentNode.remove();
+                });
+            });
+
+            // Handle form submission for multiple line items
+            transactionForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const session = supabase.auth.getSession();
+                if (!session) {
+                    showToast('Please log in to add transactions.', 'error');
+                    return;
+                }
+                const userId = (await session).data.session.user.id;
+                
+                const formData = new FormData(transactionForm);
+                const baseTransactionData = {
+                    user_id: userId,
+                    date_of_transaction: formData.get('date_of_transaction'),
+                    issued_by: formData.get('issued_by'),
+                    received_by: formData.get('received_by'),
+                    receipt_or_not: formData.get('receipt_or_not') === 'on',
+                };
+                
+                const expenseDescriptions = document.querySelectorAll('.expense-description');
+                const expenseAmounts = document.querySelectorAll('.expense-amount');
+
+                const newTransactions = [];
+                for (let i = 0; i < expenseDescriptions.length; i++) {
+                    const description = expenseDescriptions[i].value;
+                    const amount = parseFloat(expenseAmounts[i].value);
+                    if (description && !isNaN(amount) && amount > 0) {
+                        newTransactions.push({
+                            ...baseTransactionData,
+                            description_of_expense: description,
+                            amount_paid: amount,
+                        });
+                    }
+                }
+
+                if (newTransactions.length === 0) {
+                    showToast('Please add at least one valid expense line.', 'error');
+                    return;
+                }
+
+                try {
+                    const { data, error } = await supabase
+                        .from('transactions')
+                        .insert(newTransactions)
+                        .select();
+
+                    if (error) throw error;
+                    showToast('Transactions added successfully!');
+                    transactionForm.reset();
+                    // Reset the dynamic expense lines
+                    expenseItemsContainer.innerHTML = `
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mt-4 mb-2">Expenses</h3>
+                        <div class="expense-item flex flex-col md:flex-row md:space-x-2 space-y-2 md:space-y-0">
+                            <input type="text" placeholder="Description of expense" required class="expense-description w-full md:w-2/3 p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 dark:bg-slate-700 dark:border-slate-600">
+                            <input type="number" step="0.01" placeholder="Amount paid" required class="expense-amount w-full md:w-1/3 p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 dark:bg-slate-700 dark:border-slate-600">
+                        </div>
+                    `;
+                    document.getElementById('date_of_transaction').valueAsDate = new Date();
+                    fetchTransactions(userId);
+                } catch (error) {
+                    console.error('Error adding transaction:', error.message);
+                    showToast(`Failed to add transaction: ${error.message}`, 'error');
+                }
+            });
+
+            // Handle CSV export
+            exportButton.addEventListener('click', async () => {
+                const session = supabase.auth.getSession();
+                if (!session) {
+                    showToast('Please log in to export transactions.', 'error');
+                    return;
+                }
+                const userId = (await session).data.session.user.id;
+
+                const { data, error } = await supabase
+                    .from('transactions')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .order('date_of_transaction', { ascending: false });
+
+                if (error) {
+                    showToast(`Failed to export: ${error.message}`, 'error');
+                    return;
+                }
+                
+                if (data.length === 0) {
+                    showToast('No transactions to export.', 'error');
+                    return;
+                }
+
+                const headers = [
+                    'Date of Transaction',
+                    'Issued By',
+                    'Description of Expense',
+                    'Amount Paid',
+                    'Receipt',
+                    'Received By',
+                ];
+
+                const rows = data.map(t => [
+                    t.date_of_transaction,
+                    t.issued_by,
+                    t.description_of_expense,
+                    t.amount_paid,
+                    t.receipt_or_not ? 'Yes' : 'No',
+                    t.received_by,
+                ]);
+
+                const csvContent = [
+                    headers.join(','),
+                    ...rows.map(e => e.join(',')),
+                ].join('\n');
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                if (link.download !== undefined) {
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', `mobile_money_transactions_${new Date().toISOString()}.csv`);
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            });
+            
+            // Handle insights generation via Gemini API
+            insightsButton.addEventListener('click', async () => {
+                const session = supabase.auth.getSession();
+                if (!session) {
+                    showToast('Please log in to generate insights.', 'error');
+                    return;
+                }
+                const userId = (await session).data.session.user.id;
+                
+                const { data: transactions, error } = await supabase
+                    .from('transactions')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .order('date_of_transaction', { ascending: false });
+
+                if (error) {
+                    showToast(`Failed to get transactions for insights: ${error.message}`, 'error');
+                    return;
+                }
+
+                if (transactions.length === 0) {
+                    showToast('No transactions to analyze.', 'error');
+                    return;
+                }
+                
+                // Show modal and loading message
+                insightsModal.classList.remove('hidden');
+                insightsContent.innerHTML = `<p class="text-center text-slate-500 dark:text-slate-400" id="insights-loading-message">
+                    Generating your personalized spending report...
+                </p>`;
+
+                const formattedTransactions = transactions.map(t => 
+                    `Date: ${t.date_of_transaction}, Description: ${t.description_of_expense}, Amount: ${t.amount_paid}`
+                ).join('\n');
+
+                const prompt = `I am a user of a mobile money tracker app. Here is a list of my transactions:\n\n${formattedTransactions}\n\nPlease provide a concise spending summary, identify potential spending trends, and offer 2-3 practical tips for saving money. Format your response using markdown.`;
+
+                // Gemini API call
+                try {
+                    const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+                    const payload = { contents: chatHistory };
+                    const apiKey = "";
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                    
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    // Exponential backoff to handle rate limiting
+                    let backoffDelay = 1000; // Start with 1 second delay
+                    let retries = 0;
+                    const maxRetries = 5;
+
+                    while (!response.ok && retries < maxRetries) {
+                        await new Promise(resolve => setTimeout(resolve, backoffDelay));
+                        backoffDelay *= 2;
+                        retries++;
+
+                        const retryResponse = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (retryResponse.ok) {
+                            result = await retryResponse.json();
+                            break;
+                        }
+                        if (retries === maxRetries) {
+                            throw new Error(`API request failed after ${maxRetries} retries.`);
+                        }
+                    }
+
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const generatedText = result.candidates[0].content.parts[0].text;
+                        insightsContent.innerHTML = generatedText.replace(/\n/g, '<br>');
+                    } else {
+                        insightsContent.innerHTML = `<p class="text-red-500">Error generating insights: No content received from the API. Please try again later.</p>`;
+                    }
+                } catch (apiError) {
+                    console.error('Gemini API Error:', apiError);
+                    insightsContent.innerHTML = `<p class="text-red-500">Failed to connect to the Gemini API. Please check your network connection and try again.</p>`;
+                }
+            });
+
+            // Close modal button listener
+            closeModalBtn.addEventListener('click', () => {
+                insightsModal.classList.add('hidden');
+                insightsContent.innerHTML = `<p class="text-center text-slate-500 dark:text-slate-400" id="insights-loading-message">
+                    Generating your personalized spending report...
+                </p>`;
+            });
+
+            // Set the default date input to today's date
+            document.getElementById('date_of_transaction').valueAsDate = new Date();
+        });
+    </script>
+</body>
+</html>
